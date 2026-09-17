@@ -1,28 +1,27 @@
-# apps/sksnacks
+# SHSnacks
 
-SHSnacks client app inside parent **baithak** (M3).
+Shop counter app for **SHSnacks**.
 
-## First-time platform folders
+This is a **separate** app repo (`macbuilds-dev/sksnacks`).  
+Daily source of truth stays in the parent monorepo — this remote is the release / CI mirror.
 
-Agar `android/` / `ios/` missing hon (CLI sandbox):
+**Powered by [Baithak](https://github.com/macbuilds-dev/baithak)**
 
-```bash
-cd apps/sksnacks
-flutter create --org com.baithak --project-name sksnacks --platforms=android,ios .
-```
+---
 
-Phir:
+## APK
+
+→ [Releases](https://github.com/macbuilds-dev/sksnacks/releases) (`latest`)
+
+Every push builds an APK and publishes it there.
+
+---
+
+## Run locally
 
 ```bash
 flutter pub get
 flutter run
 ```
 
-## Brand
-
-- Active brand: `brands/sksnacks/brand.yaml`
-- Copy `_template` for next client under `apps/<brand>/`
-
-## Firestore sync
-
-Create a **Native** Firestore database for Firebase project `baithak-macbuilds-dev` before cloud sync works. Local Drift + backup work offline without it.
+Android package: `com.baithak.sksnacks`
