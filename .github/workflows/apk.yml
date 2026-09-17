@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# Avoid parallel runs racing on the same `latest` release (upload 404).
+concurrency:
+  group: sksnacks-apk-release
+  cancel-in-progress: false
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -53,30 +58,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -e
-          APK="${{ steps.build.outputs.apk }}"
+          set -euo pipefail
+          SRC="${{ steps.build.outputs.apk }}"
           CHANNEL="${{ steps.build.outputs.channel }}"
           SHA_SHORT="${GITHUB_SHA:0:7}"
-          NOTES="Auto APK (${CHANNEL}) from \`${SHA_SHORT}\`.
+          RUN="${{ github.run_number }}"
+          BUILD_TAG="build-${RUN}"
+          ASSET="sksnacks-${CHANNEL}-${BUILD_TAG}-${SHA_SHORT}.apk"
+          cp "$SRC" "$ASSET"
 
-          Download the \`.apk\` asset below. (Actions Artifacts also keep a copy for ~90 days.)
+          NOTES="Auto APK (${CHANNEL}) from \`${SHA_SHORT}\` (run ${RUN}).
+
+          Download the \`.apk\` asset below. Actions Artifacts also keep a copy (~90 days).
 
           Not a Play Store listing — sideload / internal test."
 
-          # Floating latest (sidebar "Releases" → this one)
+          # Floating latest: delete + recreate (avoids --clobber upload 404 races)
           if gh release view latest >/dev/null 2>&1; then
-            gh release upload latest "$APK" --clobber
-            gh release edit latest --title "SHSnacks APK (latest · ${CHANNEL})" --notes "$NOTES"
-          else
-            gh release create latest "$APK" \
-              --title "SHSnacks APK (latest · ${CHANNEL})" \
-              --notes "$NOTES" \
-              --latest
+            gh release delete latest --yes --cleanup-tag
           fi
+          # Tag may linger if release delete did not clean it
+          git push origin :refs/tags/latest 2>/dev/null || true
 
-          # Immutable build tag
-          BUILD_TAG="build-${{ github.run_number }}"
-          gh release create "$BUILD_TAG" "$APK" \
-            --title "SHSnacks APK build ${{ github.run_number }} (${CHANNEL})" \
+          gh release create latest "$ASSET" \
+            --title "SHSnacks APK (latest · ${CHANNEL})" \
             --notes "$NOTES" \
-            --latest=false
+            --latest
+
+          # Immutable per-run release (skip if re-run of same number)
+          if gh release view "$BUILD_TAG" >/dev/null 2>&1; then
+            gh release upload "$BUILD_TAG" "$ASSET" --clobber
+            gh release edit "$BUILD_TAG" --title "SHSnacks APK ${BUILD_TAG} (${CHANNEL})" --notes "$NOTES" --draft=false
+          else
+            gh release create "$BUILD_TAG" "$ASSET" \
+              --title "SHSnacks APK ${BUILD_TAG} (${CHANNEL})" \
+              --notes "$NOTES" \
+              --latest=false
+          fi
