@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function email() {
+      return request.auth.token.email != null
+        ? request.auth.token.email.lower()
+        : '';
+    }
+
+    function isPlatformAdmin() {
+      return email() in [
+        'muhammadammarchaudhry1@gmail.com',
+        'ammarchaudhry1122@gmail.com',
+        'ammarchaudhry23@gmail.com'
+      ];
+    }
+
+    // Nested Baithak shops (cutover).
+    match /baithak/{document=**} {
+      allow read, write: if signedIn() && (isPlatformAdmin() || true);
+      // TODO(tighten): seat allowlist + feature write gates before production.
+    }
+
+    // Legacy Console-friendly root collections during migration.
+    match /{collection}/{document=**} {
+      allow read, write: if signedIn()
+        && collection.matches('sksnacks_.*');
+    }
+
+    // Legacy nested tenants path.
+    match /tenants/sksnacks/{document=**} {
+      allow read, write: if signedIn();
+    }
+  }
+}

@@ -1,0 +1,35 @@
+id: sksnacks
+displayName: SHSnacks
+tagline: Garam garam, hisaab garam
+applicationId: com.baithak.sksnacks
+ownersMode: full
+languages:
+  - en
+  - ur
+  - roman
+# Kitsch / camp visual language: ironic excess, not polite heritage.
+# Hot-restart after hex changes. Style tokens also drive ThemeData chrome.
+style: kitsch
+theme:
+  # Neon snack-bazaar: clashing pink / mint / lemon on candy wash
+  primary: "#FF2D95"          # hot magenta plastic
+  secondary: "#00D4C8"        # electric mint
+  accent: "#FFE600"           # chrome lemon
+  background: "#FFE8F5"       # candy pink wash
+  surface: "#FFFDF5"          # glossy sticker white
+  onPrimary: "#1A0510"
+  onSecondary: "#041412"
+  onBackground: "#1A0510"
+  onSurface: "#1A0510"
+  success: "#39FF14"          # acid lime
+  warning: "#FF6B00"          # traffic orange
+  error: "#FF0044"            # siren red
+  outline: "#11080C"          # thick ink black
+features:
+  factory: true
+  khata: true
+  customerEyeview: true
+  dayCheckInOut: true
+  invoices: true
+  qr: true
+remote: firebase

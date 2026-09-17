@@ -1,0 +1,16 @@
+id: template
+displayName: Baithak Client Template
+applicationId: com.baithak.template
+ownersMode: full
+languages:
+  - en
+  - ur
+  - roman
+features:
+  factory: true
+  khata: true
+  customerEyeview: true
+  dayCheckInOut: true
+  invoices: true
+  qr: true
+remote: firebase
