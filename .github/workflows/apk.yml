@@ -1,4 +1,4 @@
-# Separate-repo workflow — every push: analyze + APK + GitHub Release.
+# Separate-repo workflow — every push: analyze + release APK + GitHub Release.
 # Lives at repo root as .github/workflows/apk.yml on macbuilds-dev/sksnacks.
 name: apk-on-push
 
@@ -35,63 +35,89 @@ jobs:
           fi
           echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
           test -s android/app/google-services.json
+      - name: Write upload keystore (optional — Play / proper release signing)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "No keystore secrets — release APK will use debug signing (sideload OK, not Play)."
+            echo "has_keystore=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+          {
+            echo "storePassword=${ANDROID_STORE_PASSWORD}"
+            echo "keyPassword=${ANDROID_KEY_PASSWORD}"
+            echo "keyAlias=${ANDROID_KEY_ALIAS}"
+            echo "storeFile=../upload-keystore.jks"
+          } > android/key.properties
+          echo "has_keystore=true" >> "$GITHUB_ENV"
       - run: flutter analyze --no-fatal-infos
-      - name: Build APK
+      - name: Build release APK (split per ABI — phone-sized)
         id: build
         run: |
           set -e
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "channel=release" >> "$GITHUB_OUTPUT"
-            flutter build apk --release
-          else
-            echo "channel=debug" >> "$GITHUB_OUTPUT"
-            flutter build apk --debug
-          fi
-          APK=$(ls build/app/outputs/flutter-apk/*.apk | head -1)
+          # Always --release (debug fat APKs are ~150–200MB).
+          # --split-per-abi → one APK per CPU; we publish arm64 (modern phones).
+          flutter build apk --release --split-per-abi
+          ls -lh build/app/outputs/flutter-apk/
+          APK="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+          test -f "$APK"
           echo "apk=$APK" >> "$GITHUB_OUTPUT"
-          ls -la build/app/outputs/flutter-apk/
+          echo "channel=release" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h "$APK" | cut -f1)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: sksnacks-apk
-          path: build/app/outputs/flutter-apk/*.apk
-      - name: Publish GitHub Releases (latest + build-N)
+          name: sksnacks-apk-arm64
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+      - name: Publish GitHub Release (APK only — we cannot remove GitHub source zips)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           SRC="${{ steps.build.outputs.apk }}"
-          CHANNEL="${{ steps.build.outputs.channel }}"
+          SIZE="${{ steps.build.outputs.size }}"
           SHA_SHORT="${GITHUB_SHA:0:7}"
           RUN="${{ github.run_number }}"
           BUILD_TAG="build-${RUN}"
-          ASSET="sksnacks-${CHANNEL}-${BUILD_TAG}-${SHA_SHORT}.apk"
+          ASSET="sksnacks-arm64-v8a-release-${BUILD_TAG}-${SHA_SHORT}.apk"
           cp "$SRC" "$ASSET"
 
-          NOTES="Auto APK (${CHANNEL}) from \`${SHA_SHORT}\` (run ${RUN}).
+          SIGN_NOTE="Signed with upload keystore."
+          if [ "${has_keystore:-false}" != "true" ]; then
+            SIGN_NOTE="Debug-signed release build (sideload / internal). Add keystore secrets for Play signing."
+          fi
 
-          Download the \`.apk\` asset below. Actions Artifacts also keep a copy (~90 days).
+          NOTES="**APK:** \`${ASSET}\` (${SIZE}) — arm64-v8a release.
 
-          Not a Play Store listing — sideload / internal test."
+          ${SIGN_NOTE}
 
-          # Floating latest: delete + recreate (avoids --clobber upload 404 races)
+          Commit \`${SHA_SHORT}\` · run ${RUN}.
+
+          Private repo → Releases are **not** public (collaborators only).
+
+          Note: GitHub always attaches Source code zip/tar next to assets; that cannot be turned off. Ignore those — install only the \`.apk\`."
+
           if gh release view latest >/dev/null 2>&1; then
             gh release delete latest --yes --cleanup-tag
           fi
-          # Tag may linger if release delete did not clean it
           git push origin :refs/tags/latest 2>/dev/null || true
 
           gh release create latest "$ASSET" \
-            --title "SHSnacks APK (latest · ${CHANNEL})" \
+            --title "SHSnacks APK (latest · release · arm64)" \
             --notes "$NOTES" \
             --latest
 
-          # Immutable per-run release (skip if re-run of same number)
           if gh release view "$BUILD_TAG" >/dev/null 2>&1; then
             gh release upload "$BUILD_TAG" "$ASSET" --clobber
-            gh release edit "$BUILD_TAG" --title "SHSnacks APK ${BUILD_TAG} (${CHANNEL})" --notes "$NOTES" --draft=false
+            gh release edit "$BUILD_TAG" --title "SHSnacks APK ${BUILD_TAG} (release · arm64)" --notes "$NOTES" --draft=false
           else
             gh release create "$BUILD_TAG" "$ASSET" \
-              --title "SHSnacks APK ${BUILD_TAG} (${CHANNEL})" \
+              --title "SHSnacks APK ${BUILD_TAG} (release · arm64)" \
               --notes "$NOTES" \
               --latest=false
           fi

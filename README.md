@@ -13,7 +13,12 @@ Daily source of truth stays in the parent monorepo — this remote is the releas
 
 → [Releases](https://github.com/macbuilds-dev/sksnacks/releases) (`latest`)
 
-Every push builds an APK and publishes it there.
+- **Private repo** → Releases are **not** public (only people with repo access).  
+- Download the **`.apk`** only. GitHub always also lists Source code zip/tar (cannot disable) — ignore those.  
+- CI builds **release · arm64-v8a** (`--split-per-abi`) so size stays phone-like (~local release), not a fat debug APK.
+
+Every push rebuilds and updates `latest`.
+
 
 ---
 
